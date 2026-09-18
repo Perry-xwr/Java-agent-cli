@@ -43,11 +43,20 @@ public class GlmClient implements LLMClient {
 
     @Override
     public LLMResponse chat(List<Message> messages) throws IOException {
+        return chat(messages, List.of());
+    }
+
+    @Override
+    public LLMResponse chat(List<Message> messages, List<ToolDefinition> tools) throws IOException {
         Objects.requireNonNull(messages, "messages must not be null");
+        Objects.requireNonNull(tools, "tools must not be null");
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("model", model);
         payload.put("messages", List.copyOf(messages));
+        if (!tools.isEmpty()) {
+            payload.put("tools", tools.stream().map(GlmClient::serializeTool).toList());
+        }
 
         String json = objectMapper.writeValueAsString(payload);
         Request request = new Request.Builder()
@@ -67,6 +76,18 @@ public class GlmClient implements LLMClient {
             }
             return parseResponse(responseJson);
         }
+    }
+
+    private static Map<String, Object> serializeTool(ToolDefinition tool) {
+        Map<String, Object> function = new LinkedHashMap<>();
+        function.put("name", tool.name());
+        function.put("description", tool.description());
+        function.put("parameters", tool.parameters());
+
+        Map<String, Object> serialized = new LinkedHashMap<>();
+        serialized.put("type", "function");
+        serialized.put("function", function);
+        return serialized;
     }
 
     private LLMResponse parseResponse(String responseJson) throws IOException {
