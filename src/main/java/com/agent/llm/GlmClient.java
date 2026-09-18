@@ -10,14 +10,18 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class GlmClient implements LLMClient {
     private static final String API_KEY_ENV = "GLM_API_KEY";
+    private static final String DEBUG_ENV = "GLM_DEBUG";
     private static final String DEFAULT_ENDPOINT = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
     private static final String DEFAULT_MODEL = "glm-4-flash";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -29,7 +33,7 @@ public class GlmClient implements LLMClient {
     private final ObjectMapper objectMapper;
 
     public GlmClient() {
-        this(requireApiKey(), DEFAULT_ENDPOINT, DEFAULT_MODEL, new OkHttpClient(), new ObjectMapper());
+        this(requireApiKey(), DEFAULT_ENDPOINT, DEFAULT_MODEL, createHttpClient(), new ObjectMapper());
     }
 
     GlmClient(String apiKey, String endpoint, String model,
@@ -66,9 +70,13 @@ public class GlmClient implements LLMClient {
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
+            if (isDebugEnabled()) {
+                System.out.println("GLM HTTP status: " + response.code());
+            }
             ResponseBody body = response.body();
             String responseJson = body == null ? "" : body.string();
             if (!response.isSuccessful()) {
+                System.err.println("GLM error body: " + responseJson);
                 throw new IOException("GLM request failed with HTTP " + response.code() + ": " + responseJson);
             }
             if (responseJson.isBlank()) {
@@ -123,6 +131,23 @@ public class GlmClient implements LLMClient {
             throw new IllegalStateException("Environment variable " + API_KEY_ENV + " is not set");
         }
         return apiKey;
+    }
+
+    private static OkHttpClient createHttpClient() {
+        Proxy proxy = new Proxy(
+                Proxy.Type.HTTP,
+                new InetSocketAddress("127.0.0.1", 7897)
+        );
+        return new OkHttpClient.Builder()
+                .proxy(proxy)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build();
+    }
+
+    private static boolean isDebugEnabled() {
+        return Boolean.parseBoolean(System.getenv(DEBUG_ENV));
     }
 
     private static String requireNonBlank(String value, String name) {

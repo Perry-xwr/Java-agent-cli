@@ -19,6 +19,7 @@ public class Agent {
 
     private final LLMClient llmClient;
     private final ToolRegistry toolRegistry;
+    private final Message systemMessage;
     private final List<Message> history = new ArrayList<>();
 
     public Agent(LLMClient llmClient, ToolRegistry toolRegistry) {
@@ -28,7 +29,10 @@ public class Agent {
     public Agent(LLMClient llmClient, ToolRegistry toolRegistry, String systemPrompt) {
         this.llmClient = Objects.requireNonNull(llmClient, "llmClient must not be null");
         this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry must not be null");
-        history.add(Message.system(Objects.requireNonNull(systemPrompt, "systemPrompt must not be null")));
+        this.systemMessage = Message.system(
+                Objects.requireNonNull(systemPrompt, "systemPrompt must not be null")
+        );
+        history.add(systemMessage);
     }
 
     public String run(String input) throws IOException {
@@ -58,6 +62,11 @@ public class Agent {
 
     public List<Message> history() {
         return List.copyOf(history);
+    }
+
+    public void clearHistory() {
+        history.clear();
+        history.add(systemMessage);
     }
 
     private String executeTool(ToolCall toolCall) {
